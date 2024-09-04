@@ -127,8 +127,8 @@ end
     cn = XLSX.CellRef("XFD1048576")
     @test string(cn) == "XFD1048576"
     @test XLSX.column_name(cn) == "XFD"
-    @test XLSX.row_number(cn) == 1048576
-    @test XLSX.column_number(cn) == 16384
+    @test XLSX.row_number(cn) == XLSX.EXCEL_MAX_ROWS
+    @test XLSX.column_number(cn) == XLSX.EXCEL_MAX_COLS
 
     v_column_numbers = [1
     ,    15
@@ -1110,6 +1110,31 @@ end
     test_data[5] = [ 0.2001132319, 0.2793987377, 0.0950591677, 0.0744023067, 0.8242278091, 0.6205883578, 0.9174151018, 0.6749604883 ]
     test_data[6] = [ missing for i in 1:8 ]
     check_test_data(data, test_data)
+    isfile(filename_copy) && rm(filename_copy)
+end
+
+@testset "CustomXml" begin
+    # issue #210
+    # None of the example .xlsx files in the test suite include custoimXml internal files
+    # but customXml.xlsx does
+    template = XLSX.open_xlsx_template(joinpath(data_directory, "customXml.xlsx")) 
+    filename_copy = "customXml_copy.xlsx"
+    for sn in XLSX.sheetnames(template)
+        sheet = template[sn]
+        sheet["Q1"] = "Cant" # using an apostrophe here causes a test failure reading the copy - "Evaluated: "Can&apos;t" == "Can't""
+        sheet["Q2"] = "write"
+        sheet["Q3"] = "this"
+        sheet["Q4"] = "template"
+    end
+    @test XLSX.writexlsx(filename_copy, template, overwrite=true) == nothing # This is where the bug will throw if custoimXml internal files present.
+    @test isfile(filename_copy)
+    f_copy = XLSX.readxlsx(filename_copy) # Don't really think this second part is necessary.
+    test_Xmlread = [["Cant", "write", "this", "template"]]
+    for sn in XLSX.sheetnames(f_copy)
+        sheet = template[sn]
+        data = [[sheet["Q1"], sheet["Q2"], sheet["Q3"], sheet["Q4"]]]
+        check_test_data(data, test_Xmlread)
+    end
     isfile(filename_copy) && rm(filename_copy)
 end
 

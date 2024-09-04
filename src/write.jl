@@ -457,7 +457,13 @@ function target_cell_ref_from_offset(anchor_cell::CellRef, offset::Integer, dim:
 end
 
 """
-    writetable!(sheet::Worksheet, data, columnnames; anchor_cell::CellRef=CellRef("A1"))
+    writetable!(
+        sheet::Worksheet,
+        data,
+        columnnames;
+        anchor_cell::CellRef=CellRef("A1"),
+        write_columnnames::Bool=true,
+    )
 
 Writes tabular data `data` with labels given by `columnnames` to `sheet`,
 starting at `anchor_cell`.
@@ -467,13 +473,21 @@ starting at `anchor_cell`.
 
 See also: [`XLSX.writetable`](@ref).
 """
-function writetable!(sheet::Worksheet, data, columnnames; anchor_cell::CellRef=CellRef("A1"))
+function writetable!(
+            sheet::Worksheet,
+            data,
+            columnnames;
+            anchor_cell::CellRef=CellRef("A1"),
+            write_columnnames::Bool=true,
+        )
 
     # read dimensions
     col_count = length(data)
     @assert col_count == length(columnnames) "Column count mismatch between `data` ($col_count columns) and `columnnames` ($(length(columnnames)) columns)."
     @assert col_count > 0 "Can't write table with no columns."
+    @assert col_count <= EXCEL_MAX_COLS "`data` contains $col_count columns, but Excel only supports up to $EXCEL_MAX_COLS; must reduce `data` size"
     row_count = length(data[1])
+    @assert row_count <= EXCEL_MAX_ROWS-1 "`data` contains $row_count rows, but Excel only supports up to $(EXCEL_MAX_ROWS-1); must reduce `data` size"
     if col_count > 1
         for c in 2:col_count
             @assert length(data[c]) == row_count "Row count mismatch between column 1 ($row_count rows) and column $c ($(length(data[c])) rows)."
@@ -482,16 +496,19 @@ function writetable!(sheet::Worksheet, data, columnnames; anchor_cell::CellRef=C
 
     anchor_row = row_number(anchor_cell)
     anchor_col = column_number(anchor_cell)
-
+    start_from_anchor = 1
     # write table header
-    for c in 1:col_count
-        target_cell_ref = CellRef(anchor_row, c + anchor_col - 1)
-        sheet[target_cell_ref] = string(columnnames[c])
+    if write_columnnames
+        for c in 1:col_count
+            target_cell_ref = CellRef(anchor_row, c + anchor_col - 1)
+            sheet[target_cell_ref] = string(columnnames[c])
+        end
+        start_from_anchor = 0
     end
 
     # write table data
     for r in 1:row_count, c in 1:col_count
-        target_cell_ref = CellRef(r + anchor_row, c + anchor_col - 1)
+        target_cell_ref = CellRef(r + anchor_row - start_from_anchor, c + anchor_col - 1)
         sheet[target_cell_ref] = data[c][r]
     end
 end
